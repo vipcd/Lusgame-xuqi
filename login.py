@@ -70,7 +70,10 @@ def login_one(api_key, email, password):
     from cloakbrowser import launch
     proxy = os.getenv("PROXY_URL", "")
     print(f"Proxy: {proxy}")
-    browser = launch(proxy=proxy, humanize=True, headless=True)
+    kwargs = {"humanize": True, "headless": True}
+    if proxy:
+        kwargs["proxy"] = proxy
+    browser = launch(**kwargs)
     try:
         page = browser.new_page()
         print(f"Opening login: {email}")
