@@ -1,2 +1,2 @@
-playwright==1.52.0
+cloakbrowser
 requests==2.32.3
