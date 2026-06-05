@@ -1,4 +1,4 @@
-"""Lunes Host 自动登录 - undetected-chromedriver"""
+"""Lunes Host 自动登录 - Playwright + stealth"""
 import os, sys, time, requests
 
 LOGIN_URL = "https://betadash.lunes.host/login"
@@ -35,75 +35,88 @@ def build_accounts():
     return accounts
 
 def login_one(email, password):
-    import undetected_chromedriver as uc
-    from selenium.webdriver.common.by import By
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
+    from playwright.sync_api import sync_playwright
+    from playwright_stealth import stealth_sync
     
-    options = uc.ChromeOptions()
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-setuid-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--window-size=1920,1080")
-    
-    driver = uc.Chrome(options=options, headless=True)
-    
-    try:
-        print(f"Opening login page: {email}")
-        driver.get(LOGIN_URL)
-        time.sleep(5)
+    with sync_playwright() as p:
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-blink-features=AutomationControlled",
+                "--disable-dev-shm-usage",
+            ]
+        )
+        context = browser.new_context(
+            viewport={"width": 1920, "height": 1080},
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.114 Safari/537.36",
+            locale="en-US",
+        )
+        page = context.new_page()
+        stealth_sync(page)
         
-        # Wait for form
-        WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.CSS_SELECTOR, "#email")))
-        
-        email_el = driver.find_element(By.CSS_SELECTOR, "#email")
-        email_el.clear()
-        email_el.send_keys(email)
-        
-        pass_el = driver.find_element(By.CSS_SELECTOR, "#password")
-        pass_el.clear()
-        pass_el.send_keys(password)
-        
-        # Wait for Turnstile
-        print("Waiting for Turnstile...")
-        for i in range(30):
-            time.sleep(2)
-            try:
-                val = driver.execute_script('return document.querySelector("[name=cf-turnstile-response]")?.value || ""')
+        try:
+            print(f"Opening login: {email}")
+            page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=60000)
+            time.sleep(5)
+            
+            # Fill form
+            page.wait_for_selector("#email", state="visible", timeout=25000)
+            page.fill("#email", email)
+            page.fill("#password", password)
+            
+            # Wait for Turnstile to auto-solve
+            print("Waiting for Turnstile...")
+            for i in range(25):
+                time.sleep(2)
+                val = page.evaluate('document.querySelector("[name=cf-turnstile-response]")?.value || ""')
                 if val:
                     print(f"Turnstile solved! ({i*2}s)")
                     break
-            except:
-                pass
-        else:
-            print("Turnstile timeout, trying submit anyway...")
-        
-        # Submit
-        btn = driver.find_element(By.CSS_SELECTOR, 'button[type="submit"]')
-        btn.click()
-        time.sleep(5)
-        
-        url = driver.current_url
-        if "/login" not in url:
-            print(f"Login success: {url}")
-            for sid in ["51160", "60685"]:
+            else:
+                print("Turnstile timeout")
+            
+            # Click submit
+            page.click('button[type="submit"]')
+            time.sleep(8)
+            
+            url = page.url
+            print(f"Current URL: {url}")
+            
+            if "/login" not in url:
+                print(f"Login success!")
+                # Visit servers
+                for sid in ["51160", "60685"]:
+                    try:
+                        page.goto(f"https://betadash.lunes.host/servers/{sid}", timeout=30000)
+                        time.sleep(3)
+                        print(f"  Visited server {sid}")
+                    except Exception as e:
+                        print(f"  Server {sid}: {e}")
+                
+                # Logout
                 try:
-                    driver.get(f"https://betadash.lunes.host/servers/{sid}")
-                    time.sleep(3)
-                    print(f"  Visited server {sid}")
-                except Exception as e:
-                    print(f"  Server {sid}: {e}")
-            return True
-        else:
-            print(f"Login failed, still on: {url}")
+                    page.goto("https://betadash.lunes.host/logout", timeout=15000)
+                    print("  Logged out")
+                except:
+                    pass
+                return True
+            else:
+                # Check for error messages
+                try:
+                    flash = page.locator(".flash-message").text_content()
+                    print(f"Error: {flash}")
+                except:
+                    pass
+                page.screenshot(path=f"fail-{int(time.time())}.png")
+                return False
+        except Exception as e:
+            print(f"Error: {e}")
             return False
-    except Exception as e:
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-    finally:
-        driver.quit()
+        finally:
+            context.close()
+            browser.close()
 
 def main():
     accounts = build_accounts()
