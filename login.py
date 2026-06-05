@@ -43,70 +43,63 @@ def login_one(email, password):
     browser = launch(
         proxy=proxy,
         humanize=True,
-        headless=False,
+        headless=True,
     )
     
     try:
         page = browser.new_page()
         print(f"Opening login: {email}")
         page.goto(LOGIN_URL, timeout=60000)
-        time.sleep(3)
+        time.sleep(5)
         
-        # Debug: check page state
         url1 = page.url
-        title1 = page.title()
-        print(f"Page loaded: url={url1}, title={title1}")
+        print(f"Page loaded: {url1}")
         
-        # Wait for email field
         page.wait_for_selector("#email", state="visible", timeout=25000)
         page.fill("#email", email)
         page.fill("#password", password)
         
-        # Check Turnstile token before waiting
-        val0 = page.evaluate('document.querySelector("[name=cf-turnstile-response]")?.value || ""')
-        print(f"Turnstile token before wait: '{val0[:20]}...' (len={len(val0)})")
-        
-        # Wait for Turnstile to actually solve
+        # Wait for Turnstile
         print("Waiting for Turnstile...")
+        solved = False
         for i in range(30):
             time.sleep(2)
             val = page.evaluate('document.querySelector("[name=cf-turnstile-response]")?.value || ""')
             if val and len(val) > 10:
-                print(f"Turnstile solved! ({(i+1)*2}s) token={val[:30]}...")
+                print(f"Turnstile solved! ({(i+1)*2}s)")
+                solved = True
                 break
-        else:
-            print("Turnstile timeout")
+        if not solved:
+            print("Turnstile timeout, trying submit anyway...")
         
         page.screenshot(path=f"before-submit-{email.split('@')[0]}.png")
         
-        # Submit
         page.click('button[type="submit"]')
-        print("Submitted, waiting for redirect...")
+        print("Submitted, waiting...")
         
-        # Wait longer for redirect
-        for i in range(15):
+        # Wait for redirect
+        for i in range(20):
             time.sleep(2)
             url = page.url
             if "/login" not in url:
                 print(f"Redirected after {(i+1)*2}s: {url}")
                 break
         else:
-            print(f"Still on: {page.url}")
+            print(f"Still on login page: {page.url}")
         
         page.screenshot(path=f"after-submit-{email.split('@')[0]}.png")
         
         url = page.url
         print(f"Final URL: {url}")
         
-        # Check for login success indicators
         logged_in = "/login" not in url
         if not logged_in:
-            # Check page content for success indicators
             try:
                 body = page.locator("body").text_content() or ""
-                if "logout" in body.lower() or "server" in body.lower() or "dashboard" in body.lower():
+                print(f"Page text (first 300): {body[:300]}")
+                if any(kw in body.lower() for kw in ["logout", "server", "dashboard", "servers"]):
                     logged_in = True
-                    print("Found logout/server text, considering logged in")
+                    print("Found success keywords in page!")
             except:
                 pass
         
@@ -125,12 +118,6 @@ def login_one(email, password):
                 pass
             return True
         else:
-            # Debug: print page content
-            try:
-                body = page.locator("body").text_content() or ""
-                print(f"Page content: {body[:500]}")
-            except:
-                pass
             return False
     except Exception as e:
         print(f"Error: {e}")
