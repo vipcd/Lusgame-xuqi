@@ -26,11 +26,11 @@ jobs:
           tar xzf /tmp/gost.tar.gz -C /tmp
           chmod +x /tmp/gost
           # Start gost: local HTTP proxy -> upstream SOCKS5
-          nohup /tmp/gost -L http://:8888 -F "socks5://${{ secrets.SOCKS5_PROXY }}" > /tmp/gost.log 2>&1 &
-          sleep 3
-          # Test proxy works
-          curl -s --proxy http://127.0.0.1:8888 --connect-timeout 10 https://httpbin.org/ip && echo "Proxy OK" || echo "Proxy FAILED"
+          nohup /tmp/gost -L http://:8888 -F "${{ secrets.SOCKS5_PROXY }}" > /tmp/gost.log 2>&1 &
+          sleep 5
           cat /tmp/gost.log
+          # Test proxy works
+          curl -s --proxy http://127.0.0.1:8888 --connect-timeout 15 https://httpbin.org/ip && echo "Proxy OK" || echo "Proxy FAILED"
 
       - name: Install deps
         run: pip install --no-cache-dir -r requirements.txt
