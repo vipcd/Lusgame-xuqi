@@ -1,2 +1,2 @@
-playwright==1.49.0
-requests
+nodriver==0.38
+requests==2.32.3
