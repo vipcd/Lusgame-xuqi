@@ -20,22 +20,12 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Setup gost proxy
-        run: |
-          wget -q "https://github.com/go-gost/gost/releases/download/v3.2.6/gost_3.2.6_linux_amd64.tar.gz" -O /tmp/gost.tar.gz
-          tar xzf /tmp/gost.tar.gz -C /tmp
-          chmod +x /tmp/gost
-          nohup /tmp/gost -L http://:8888 -F "${{ secrets.SOCKS5_PROXY }}" > /tmp/gost.log 2>&1 &
-          sleep 5
-          curl -s --proxy http://127.0.0.1:8888 --connect-timeout 15 https://httpbin.org/ip && echo "Proxy OK" || echo "Proxy FAILED"
-
       - name: Install deps
         run: pip install --no-cache-dir -r requirements.txt
 
       - name: Run login
         env:
           ACCOUNTS_BATCH: ${{ secrets.ACCOUNTS_BATCH }}
-          PROXY_URL: http://127.0.0.1:8888
           CAPSOLVER_KEY: ${{ secrets.CAPSOLVER_KEY }}
         run: python login.py
 
