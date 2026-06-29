@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   renew:
-    runs-on: ubuntu-latest
+    # 🔴 核心修改：这里从 ubuntu-latest 改为 ubuntu-22.04，确保浏览器依赖 100% 成功安装
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
 
     steps:
@@ -31,7 +32,7 @@ jobs:
           wget -qO hysteria https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
           chmod +x hysteria
           
-          # 直接运行刚才独立出来的 Python 脚本，安全可靠
+          # 直接运行独立出来的 Python 脚本
           python parse_node.py
           
           ./hysteria client --config hy2_config.yaml > hysteria.log 2>&1 &
