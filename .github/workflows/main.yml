@@ -2,7 +2,7 @@ name: Lunes Auto Login
 
 on:
   schedule:
-    - cron: "0 2 */14 * *"
+    - cron: "05 3 */14 * *"
   workflow_dispatch:
 
 permissions:
