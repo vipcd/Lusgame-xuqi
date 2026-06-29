@@ -41,24 +41,19 @@ uri = os.getenv('HY2_NODE', '').strip()
 if not uri:
     raise RuntimeError('GitHub Secrets 中缺少 HY2_NODE 变量，请先前往仓库设置中添加。')
 
-# 兼容部分格式简写
 if uri.startswith('hy2://'):
     uri = uri.replace('hy2://', 'hysteria2://', 1)
 
 try:
     parsed = urllib.parse.urlparse(uri)
-    # 提取服务器地址和端口
     server = parsed.netloc.split('@')[-1]
-    # 提取认证密码/UUID
     auth = parsed.netloc.split('@')[0] if '@' in parsed.netloc else ''
     
-    # 提取查询参数
     queries = urllib.parse.parse_qs(parsed.query)
     sni = queries.get('sni', [''])[0]
     insecure = queries.get('insecure', ['0'])[0] in ['1', 'true', 'True'] or queries.get('allowInsecure', ['0'])[0] in ['1', 'true', 'True']
     pin = queries.get('pinSHA256', [''])[0]
     
-    # 拼接 Hysteria2 配置文件
     config = f"server: {server}\n"
     if auth:
         config += f"auth: {auth}\n"
@@ -74,7 +69,6 @@ except Exception as e:
     raise RuntimeError(f'解析 Hysteria2 节点链接失败，请检查 Secrets 中的节点格式是否正确。错误: {e}')
 EOF
           
-          # 执行解析
           python parse_node.py
           
           # 3. 在后台静默启动 Hysteria 客户端
