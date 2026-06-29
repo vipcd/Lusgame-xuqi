@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   renew:
-    runs-on: ubuntu-latest
+    # 🌟 核心修复点：强制指定 22.04 稳定系统，避开 24.04 的老依赖缺失坑
+    runs-on: ubuntu-22.04
     timeout-minutes: 10
 
     steps:
@@ -30,7 +31,7 @@ jobs:
         with:
           python-version: "3.12"
 
-      # 2. 🌟 已修正：安装依赖，并精准安装火狐内核（firefox）
+      # 2. 安装依赖，并精准安装火狐内核（firefox）
       - name: Install dependencies
         run: |
           pip install --no-cache-dir -r luneshost.txt
@@ -48,7 +49,7 @@ jobs:
           sleep 5
           echo "Hysteria2 代理已成功在后台启动..."
 
-      # 4. 🌟 已修正：重新加上 xvfb-run，允许非无头模式正常跑起来
+      # 4. 加上 xvfb-run，允许非无头模式正常跑起来
       - name: Run keepalive
         env:
           LUNES_EMAIL: ${{ secrets.LUNES_EMAIL }}
