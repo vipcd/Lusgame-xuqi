@@ -36,8 +36,12 @@ jobs:
           echo "Hysteria2 代理已成功在后台启动..."
 
       - name: Run keepalive
+        # 🔴 核心修改：将原来的 ACCOUNTS_BATCH 废弃，改成 4 个独立的变量传入
         env:
-          ACCOUNTS_BATCH: ${{ secrets.ACCOUNTS_BATCH }}
+          LUNES_EMAIL: ${{ secrets.LUNES_EMAIL }}
+          LUNES_PASSWORD: ${{ secrets.LUNES_PASSWORD }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
         run: python login.py
 
       - name: Commit timestamp
@@ -51,7 +55,6 @@ jobs:
           git add time.txt
           git diff --cached --quiet || (git commit -m "run $(date +'%Y-%m-%d %H:%M')" && git push)
 
-      # 🔴 核心改进：如果执行失败，把截取到的网页照片打包上传到 GitHub 页面上供下载
       - name: Upload Screenshot on Failure
         if: failure()
         uses: actions/upload-artifact@v4
