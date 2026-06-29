@@ -22,7 +22,8 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --no-cache-dir -r requirements.txt
-          python -m playwright install chromium --with-deps
+          # 🌟 修改：安装并配置更加隐蔽、不易被 CF 针对的火狐浏览器内核
+          python -m playwright install firefox --with-deps
 
       - name: Setup and Start Hysteria2 Proxy
         env:
@@ -41,7 +42,6 @@ jobs:
           LUNES_PASSWORD: ${{ secrets.LUNES_PASSWORD }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
-        # 🌟 核心修改：使用 xvfb-run 启动，强制浏览器走真实的桌面渲染流
         run: xvfb-run python login.py
 
       - name: Commit timestamp
@@ -62,10 +62,3 @@ jobs:
           name: lunes-login-failure-image
           path: login_failed.png
           if-no-files-found: ignore
-
-      - name: Print Debug Logs on Failure
-        if: failure()
-        run: |
-          echo "=================== Hysteria 运行日志 ==================="
-          cat hysteria.log || echo "未找到 hysteria.log 日志文件"
-          echo "========================================================"
