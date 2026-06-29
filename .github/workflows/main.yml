@@ -23,6 +23,7 @@ jobs:
             luneshost.py
             luneshost.txt
             luneshost-node.py
+            luneshost-time.txt
           sparse-checkout-cone-mode: false
 
       - uses: actions/setup-python@v5
