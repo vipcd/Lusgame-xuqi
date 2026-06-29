@@ -1,5 +1,5 @@
 """
-Lunes Host 自动登录续期脚本 - 独立变量 + CF 隐身过检测版
+Lunes Host 自动登录续期脚本 - 火狐内核 + CF Token 哨兵版
 """
 import os
 import sys
@@ -7,10 +7,8 @@ import time
 import re
 import requests
 from playwright.sync_api import sync_playwright
-# 🌟 引入隐身混淆库
-from playwright_stealth import stealth_sync
 
-UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:126.0) Gecko/20100101 Firefox/126.0"
 
 def tg_send(text, token="", chat_id=""):
     token, chat_id = (token or "").strip(), (chat_id or "").strip()
@@ -32,40 +30,25 @@ def keepalive(email, password):
     with sync_playwright() as p:
         print("  正在通过 Hysteria2 节点建立安全浏览器隧道...")
         try:
-            # 🌟 升级：改为 headless=False（有头模式），并最大化窗口伪装成正常用户
-            browser = p.chromium.launch(
+            # 🌟 升级：改用极难别被 CF 识破特征的 Firefox 引擎启动
+            browser = p.firefox.launch(
                 headless=False,
-                args=[
-                    "--disable-blink-features=AutomationControlled", 
-                    "--no-sandbox",
-                    "--start-maximized",
-                    "--disable-infobars"
-                ],
                 proxy={"server": "http://127.0.0.1:1081"} 
             )
         except Exception as b_err:
             print(f"  ❌ 浏览器启动失败: {b_err}")
             return False, [f"browser launch failed: {b_err}"]
 
-        # 🌟 升级：给浏览器上下文指定一个真实的桌面分辨率
         context = browser.new_context(
             user_agent=UA,
             viewport={"width": 1920, "height": 1080}
         )
         page = context.new_page()
         
-        # 🌟 升级：在打开网页前，强行注入 Stealth 隐身脚本，抹除所有自动化痕迹
-        stealth_sync(page)
-        
         try:
             print("  正在打开 Lunes 登录页面...")
             page.goto("https://betadash.lunes.host/login", timeout=45000)
-            page.wait_for_timeout(5000)
-            
-            # 给 Cloudflare 充分的默默解析和收集指纹时间
-            if "cloudflare" in page.content().lower():
-                print("  检测到 页面包含 Cloudflare 关键字，给予 8 秒宽限期让环境静置...")
-                page.wait_for_timeout(8000)
+            page.wait_for_timeout(4000)
             
             p_len = len(password)
             p_preview = password[0] + "*" * (p_len - 2) + password[-1] if p_len > 2 else "**"
@@ -75,29 +58,52 @@ def keepalive(email, password):
             email_input = page.locator("input[type='email']").first
             pass_input = page.locator("input[type='password']").first
             
-            # 🌟 升级：绝不用 fill()。改用 press_sequentially，模拟真人间隔 100-150 毫秒打字
-            print("  正在模拟真人敲击键盘输入账号...")
+            print("  正在模拟输入账号和密码...")
             email_input.focus()
             email_input.press_sequentially(email, delay=100)
-            page.wait_for_timeout(800)
+            page.wait_for_timeout(500)
             
-            print("  正在模拟真人敲击键盘输入密码...")
             pass_input.focus()
-            pass_input.press_sequentially(password, delay=120)
+            pass_input.press_sequentially(password, delay=100)
             page.wait_for_timeout(1000)
             
+            # 🌟🌟 核心突破：拦截抢跑！死循环监控 Cloudflare 验证状态
+            print("  ⏳ [哨兵防御] 正在监控 Cloudflare Turnstile 验证生成状态...")
+            token_passed = False
+            for i in range(20):  # 最多耐心等待 20 秒
+                token = page.evaluate("() => { const el = document.querySelector('[name=\"cf-turnstile-response\"]') || document.querySelector('[name=\"g-recaptcha-response\"]'); return el ? el.value : ''; }")
+                if token and len(token) > 15:
+                    print(f"  ✅ [大获全胜] Cloudflare 成功放行！检测到有效安全加密 Token (长度: {len(token)})")
+                    token_passed = True
+                    break
+                
+                # 针对极其少见的硬风控 Managed 挑战（需要手动点复选框），做一次自动化模拟框架击活
+                if i == 5:
+                    print("  👉 检测到环境解析较慢，尝试对潜在的 Cloudflare 交互框执行模拟激活...")
+                    try:
+                        for frame in page.frames:
+                            if "challenges.cloudflare.com" in frame.url:
+                                frame.click("body", timeout=1500)
+                    except:
+                        pass
+                        
+                page.wait_for_timeout(1000)
+
+            if not token_passed:
+                print("  ⚠️ 警告：等了 20 秒网站仍未下发验证 Token，可能当前代理节点纯净度较低。尝试强行提交...")
+
             submit_btn = page.locator("button[type='submit']").first
             print("  正在点击登录按钮...")
             submit_btn.click()
             
-            print("  等待页面跳转中（CF 验证通过通常需要较长时间）...")
-            page.wait_for_timeout(12000)
+            print("  等待页面跳转中...")
+            page.wait_for_timeout(10000)
             
             content = page.content()
             current_url = page.url
             
             if "profile-header" in content or "servers online" in content or "servers" in current_url:
-                print("  🎉 🎉 🎉 成功突破 Cloudflare 防护，登录成功！")
+                print("  🎉 🎉 🎉 成功突破防护，登录进入控制台！")
                 results.append("dashboard OK")
                 
                 server_ids = ["51160", "60685"] 
@@ -139,9 +145,8 @@ def keepalive(email, password):
                 print(f"  🔍 最终停留在 URL: {current_url}")
                 try:
                     page.screenshot(path="login_failed.png", full_page=True)
-                    print("  📸 已成功截取失败时的完整网页，并保存为 login_failed.png")
-                except Exception as s_err:
-                    print(f"  📸 截图失败: {s_err}")
+                except:
+                    pass
                 results.append("login failed")
                 success = False
                 
@@ -164,7 +169,7 @@ def main():
         print("❌ 错误：缺少关键环境变量。")
         sys.exit(1)
 
-    print(f"\n{'='*50}\n正在为账号 {email} 执行保活 (CF 隐身过检测模式)\n{'='*50}")
+    print(f"\n{'='*50}\n正在为账号 {email} 执行保活 (火狐防抢跑模式)\n{'='*50}")
     success, detail = keepalive(email, password)
     
     status_str = "OK" if success else "FAIL"
