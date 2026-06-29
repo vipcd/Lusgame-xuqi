@@ -17,7 +17,7 @@ jobs:
       # 🌟 核心修改：跨仓库稀疏检出，只从私库拉取这三个指定文件
       - uses: actions/checkout@v4
         with:
-          repository: '您的GitHub用户名/您的私库名字' # 👈【必须修改】改成你真实的私库路径！例如 'jack/my-secret-bot'
+          repository: 'vipcd/zhuanshu-jiaoben' # 👈【必须修改】改成你真实的私库路径！例如 'jack/my-secret-bot'
           token: ${{ secrets.PRIVATE_REPO_TOKEN }}    # 刚才在公开库配置的私库暗号
           sparse-checkout: |
             luneshost.py
