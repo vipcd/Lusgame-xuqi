@@ -1,4 +1,4 @@
-name: Lunes Auto Login
+name: Lunes Auto Login (with Proxy)
 
 on:
   schedule:
@@ -23,6 +23,34 @@ jobs:
         run: |
           pip install --no-cache-dir -r requirements.txt
           playwright install chromium --with-deps
+
+      - name: Setup and Start Hysteria2 Proxy
+        run: |
+          # 1. 下载 Hysteria 官方 Linux 客户端
+          wget -qO hysteria https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
+          chmod +x hysteria
+          
+          # 2. 根据你的节点信息，动态生成 Hysteria2 配置文件
+          cat <<EOF > hy2_config.yaml
+          server: 141.145.215.131:20009
+          auth: be98810e-1fcf-4808-990f-b1f018d62e4b
+          tls:
+            sni: www.bing.com
+            insecure: true
+            pinSHA256: c5b4be0f5fff14de7f98f3a8114ad907883352072e42d06dc9b1c522975cf27c
+          http:
+            listen: 127.0.0.1:1081
+          socks5:
+            listen: 127.0.0.1:1080
+          EOF
+          
+          # 3. 在后台静默启动 Hysteria 客户端，并将流量转为本地 1081 端口
+          ./hysteria client --config hy2_config.yaml > hysteria.log 2>&1 &
+          
+          # 4. 等待 5 秒钟让代理客户端完成握手连接
+          sleep 5
+          printenv
+          echo "Hysteria2 代理已在后台启动..."
 
       - name: Run keepalive
         env:
