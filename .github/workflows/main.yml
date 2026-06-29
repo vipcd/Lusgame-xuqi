@@ -1,4 +1,4 @@
-name: Lunes Auto Login (with Proxy)
+name: Lunes Auto Login (with Dynamic Proxy)
 
 on:
   schedule:
@@ -25,32 +25,64 @@ jobs:
           playwright install chromium --with-deps
 
       - name: Setup and Start Hysteria2 Proxy
+        env:
+          HY2_NODE: ${{ secrets.HY2_NODE }}
         run: |
           # 1. 下载 Hysteria 官方 Linux 客户端
           wget -qO hysteria https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
           chmod +x hysteria
           
-          # 2. 根据你的节点信息，动态生成 Hysteria2 配置文件
-          cat <<EOF > hy2_config.yaml
-          server: 141.145.215.131:20009
-          auth: be98810e-1fcf-4808-990f-b1f018d62e4b
-          tls:
-            sni: www.bing.com
-            insecure: true
-            pinSHA256: c5b4be0f5fff14de7f98f3a8114ad907883352072e42d06dc9b1c522975cf27c
-          http:
-            listen: 127.0.0.1:1081
-          socks5:
-            listen: 127.0.0.1:1080
-          EOF
+          # 2. 动态解析 Secret 中的 Hysteria2 节点链接并生成配置文件
+          cat << 'EOF' > parse_node.py
+import os
+import urllib.parse
+
+uri = os.getenv('HY2_NODE', '').strip()
+if not uri:
+    raise RuntimeError('GitHub Secrets 中缺少 HY2_NODE 变量，请先前往仓库设置中添加。')
+
+# 兼容部分格式简写
+if uri.startswith('hy2://'):
+    uri = uri.replace('hy2://', 'hysteria2://', 1)
+
+try:
+    parsed = urllib.parse.urlparse(uri)
+    # 提取服务器地址和端口
+    server = parsed.netloc.split('@')[-1]
+    # 提取认证密码/UUID
+    auth = parsed.netloc.split('@')[0] if '@' in parsed.netloc else ''
+    
+    # 提取查询参数
+    queries = urllib.parse.parse_qs(parsed.query)
+    sni = queries.get('sni', [''])[0]
+    insecure = queries.get('insecure', ['0'])[0] in ['1', 'true', 'True'] or queries.get('allowInsecure', ['0'])[0] in ['1', 'true', 'True']
+    pin = queries.get('pinSHA256', [''])[0]
+    
+    # 拼接 Hysteria2 配置文件
+    config = f"server: {server}\n"
+    if auth:
+        config += f"auth: {auth}\n"
+    config += f"tls:\n  sni: {sni if sni else 'www.bing.com'}\n  insecure: {'true' if insecure else 'false'}\n"
+    if pin:
+        config += f"  pinSHA256: {pin}\n"
+    config += "http:\n  listen: 127.0.0.1:1081\nsocks5:\n  listen: 127.0.0.1:1080\n"
+    
+    with open('hy2_config.yaml', 'w') as f:
+        f.write(config)
+    print('✅ 成功从加密变量 HY2_NODE 中解析并生成 hy2_config.yaml！')
+except Exception as e:
+    raise RuntimeError(f'解析 Hysteria2 节点链接失败，请检查 Secrets 中的节点格式是否正确。错误: {e}')
+EOF
           
-          # 3. 在后台静默启动 Hysteria 客户端，并将流量转为本地 1081 端口
+          # 执行解析
+          python parse_node.py
+          
+          # 3. 在后台静默启动 Hysteria 客户端
           ./hysteria client --config hy2_config.yaml > hysteria.log 2>&1 &
           
           # 4. 等待 5 秒钟让代理客户端完成握手连接
           sleep 5
-          printenv
-          echo "Hysteria2 代理已在后台启动..."
+          echo "Hysteria2 代理已成功在后台启动..."
 
       - name: Run keepalive
         env:
