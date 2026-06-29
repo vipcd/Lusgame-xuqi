@@ -47,7 +47,6 @@ def keepalive(email, password):
     success = False
     
     with sync_playwright() as p:
-        # 【关键改动】启动 Chromium 浏览器时，挂载本地 Hysteria2 转换出来的 HTTP 代理
         print("  正在通过 Hysteria2 节点建立安全浏览器隧道...")
         browser = p.chromium.launch(
             headless=True,
