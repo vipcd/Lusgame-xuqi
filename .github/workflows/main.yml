@@ -14,16 +14,16 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      # 🌟 核心修改：跨仓库稀疏检出，只从私库拉取这三个指定文件
+      # 🌟 修改点 1：在稀疏检出名单里，把 time.txt 也加进去预留位置
       - uses: actions/checkout@v4
         with:
-          repository: 'vipcd/zhuanshu-jiaoben' # 👈【必须修改】改成你真实的私库路径！例如 'jack/my-secret-bot'
-          token: ${{ secrets.PRIVATE_REPO_TOKEN }}    # 刚才在公开库配置的私库暗号
+          repository: 'vipcd/zhuanshu-jiaoben' # 👈 记得改成你真实的私库路径！
+          token: ${{ secrets.PRIVATE_REPO_TOKEN }}
           sparse-checkout: |
-            luneshost.py
-            luneshost.txt
             luneshost-node.py
             luneshost-time.txt
+            luneshost.py
+            luneshost.txt
           sparse-checkout-cone-mode: false
 
       - uses: actions/setup-python@v5
@@ -41,7 +41,6 @@ jobs:
         run: |
           wget -qO hysteria https://github.com/apernet/hysteria/releases/latest/download/hysteria-linux-amd64
           chmod +x hysteria
-          # 直接运行从私库里拉出来的解析脚本
           python parse_node.py
           ./hysteria client --config hy2_config.yaml > hysteria.log 2>&1 &
           sleep 5
@@ -58,15 +57,18 @@ jobs:
       - name: Commit timestamp
         if: always()
         env:
-          GITHUB_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN }} # 用私库 Token，把时间戳更新回私库，公开库保持绝对干净
+          GITHUB_TOKEN: ${{ secrets.PRIVATE_REPO_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           echo "$(date +'%Y-%m-%d %H:%M:%S')" > time.txt
-          git add time.txt
+          
+          # 🌟 修改点 2：加上 --sparse 参数，强行允许 Git 追踪并添加 time.txt
+          git add --sparse time.txt
+          
           git diff --cached --quiet || (git commit -m "run $(date +'%Y-%m-%d %H:%M')" && git push)
 
-      # 无论成功失败，截图都会打包上传到当前工作流产物里
+      # 无论成功失败，截图都会打包上传
       - name: Upload Screenshots
         if: always()
         uses: actions/upload-artifact@v4
