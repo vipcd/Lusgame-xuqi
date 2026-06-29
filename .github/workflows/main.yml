@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --no-cache-dir -r requirements.txt
-          playwright install chromium --with-deps
+          python -m playwright install chromium --with-deps
 
       - name: Setup and Start Hysteria2 Proxy
         env:
@@ -39,7 +39,8 @@ import urllib.parse
 
 uri = os.getenv('HY2_NODE', '').strip()
 if not uri:
-    raise RuntimeError('GitHub Secrets 中缺少 HY2_NODE 变量，请先前往仓库设置中添加。')
+    print("❌ 错误：GitHub Secrets 中没有找到 HY2_NODE 变量，请先前往仓库设置中添加！")
+    exit(1)
 
 if uri.startswith('hy2://'):
     uri = uri.replace('hy2://', 'hysteria2://', 1)
@@ -48,6 +49,7 @@ try:
     parsed = urllib.parse.urlparse(uri)
     server = parsed.netloc.split('@')[-1]
     auth = parsed.netloc.split('@')[0] if '@' in parsed.netloc else ''
+    auth = urllib.parse.unquote(auth)
     
     queries = urllib.parse.parse_qs(parsed.query)
     sni = queries.get('sni', [''])[0]
@@ -66,10 +68,11 @@ try:
         f.write(config)
     print('✅ 成功从加密变量 HY2_NODE 中解析并生成 hy2_config.yaml！')
 except Exception as e:
-    raise RuntimeError(f'解析 Hysteria2 节点链接失败，请检查 Secrets 中的节点格式是否正确。错误: {e}')
+    print(f'❌ 解析 Hysteria2 节点链接失败，请检查节点格式。错误: {e}')
+    exit(1)
 EOF
           
-          python parse_node.py
+          python parse_node.py || exit 1
           
           # 3. 在后台静默启动 Hysteria 客户端
           ./hysteria client --config hy2_config.yaml > hysteria.log 2>&1 &
@@ -93,3 +96,11 @@ EOF
           echo "$(date +'%Y-%m-%d %H:%M:%S')" > time.txt
           git add time.txt
           git diff --cached --quiet || (git commit -m "run $(date +'%Y-%m-%d %H:%M')" && git push)
+
+      # 【新增诊断步骤】如果运行失败，自动打印 Hysteria2 代理日志，方便一眼看出节点是否有问题
+      - name: Print Debug Logs on Failure
+        if: failure()
+        run: |
+          echo "=================== Hysteria 运行日志 ==================="
+          cat hysteria.log || echo "未找到 hysteria.log 日志文件"
+          echo "========================================================"
