@@ -83,7 +83,9 @@ def keepalive(email, password):
             print("  正在点击登录按钮...")
             submit_btn.click()
             
-            page.wait_for_timeout(6000)
+            # 延长等待跳转的时间到 10 秒，防止代理网络慢
+            print("  等待页面跳转中...")
+            page.wait_for_timeout(10000)
             
             content = page.content()
             current_url = page.url
@@ -128,6 +130,13 @@ def keepalive(email, password):
                 success = True
             else:
                 print(f"  ❌ 登录失败。可能原因：密码错误、节点断连、或 Cloudflare 拦截。")
+                print(f"  🔍 当前页面 URL: {current_url}")
+                try:
+                    # 📷 核心核心：登录失败时自动拍照
+                    page.screenshot(path="login_failed.png", full_page=True)
+                    print("  📸 已成功截取失败时的完整网页，并保存为 login_failed.png")
+                except Exception as s_err:
+                    print(f"  📸 截图失败: {s_err}")
                 results.append("login failed")
                 success = False
                 
