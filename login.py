@@ -1,5 +1,5 @@
 """
-Lunes Host 自动登录续期脚本 - 基于 Playwright 自动化浏览器（支持 Hysteria2 代理）
+Lunes Host 自动登录续期脚本 - 独立变量干净版（基于 Playwright）
 """
 import os
 import sys
@@ -8,7 +8,7 @@ import re
 import requests
 from playwright.sync_api import sync_playwright
 
-UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 def tg_send(text, token="", chat_id=""):
     token, chat_id = (token or "").strip(), (chat_id or "").strip()
@@ -22,25 +22,6 @@ def tg_send(text, token="", chat_id=""):
         )
     except Exception as e: 
         print(f"TG 发送失败: {e}")
-
-def build_accounts():
-    batch = (os.getenv("ACCOUNTS_BATCH") or "").strip()
-    if not batch: 
-        raise RuntimeError("GitHub Secrets 中缺少 ACCOUNTS_BATCH 变量")
-    accounts = []
-    for raw in batch.splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"): 
-            continue
-        parts = [p.strip() for p in line.split(",")]
-        if len(parts) >= 2:
-            accounts.append({
-                "email": parts[0],
-                "password": parts[1],
-                "tg_token": parts[2] if len(parts) > 2 else "",
-                "tg_chat": parts[3] if len(parts) > 3 else "",
-            })
-    return accounts
 
 def keepalive(email, password):
     results = []
@@ -70,6 +51,12 @@ def keepalive(email, password):
                 print("  检测到 Cloudflare 验证防护，等待节点自动解析...")
                 page.wait_for_timeout(6000)
             
+            # 🔴 核心诊断：看一眼独立读取后的密码特征，是不是还不对！
+            p_len = len(password)
+            p_preview = password[0] + "*" * (p_len - 2) + password[-1] if p_len > 2 else "**"
+            print(f"  🔍 [安全诊断] 脚本直接读取到的账号: {email}")
+            print(f"  🔍 [安全诊断] 脚本直接读取到的密码长度: {p_len} 位 | 密文预览: {p_preview}")
+            
             print("  正在自动输入账号和密码...")
             email_input = page.locator("input[type='email']").first
             pass_input = page.locator("input[type='password']").first
@@ -83,7 +70,6 @@ def keepalive(email, password):
             print("  正在点击登录按钮...")
             submit_btn.click()
             
-            # 延长等待跳转的时间到 10 秒，防止代理网络慢
             print("  等待页面跳转中...")
             page.wait_for_timeout(10000)
             
@@ -132,7 +118,6 @@ def keepalive(email, password):
                 print(f"  ❌ 登录失败。可能原因：密码错误、节点断连、或 Cloudflare 拦截。")
                 print(f"  🔍 当前页面 URL: {current_url}")
                 try:
-                    # 📷 核心核心：登录失败时自动拍照
                     page.screenshot(path="login_failed.png", full_page=True)
                     print("  📸 已成功截取失败时的完整网页，并保存为 login_failed.png")
                 except Exception as s_err:
@@ -150,38 +135,27 @@ def keepalive(email, password):
     return success, results
 
 def main():
-    accounts = build_accounts()
-    ok, fail = 0, 0
-    results = []
+    email = (os.getenv("LUNES_EMAIL") or "").strip()
+    password = (os.getenv("LUNES_PASSWORD") or "").strip()
+    tg_token = (os.getenv("TG_TOKEN") or "").strip()
+    tg_chat = (os.getenv("TG_CHAT_ID") or "").strip()
+
+    if not email or not password:
+        print("❌ 错误：GitHub Secrets 中缺少 LUNES_EMAIL 或 LUNES_PASSWORD 变量，请先前往设置！")
+        sys.exit(1)
+
+    print(f"\n{'='*50}\n正在为账号 {email} 执行保活 (独立变量模式)\n{'='*50}")
+    success, detail = keepalive(email, password)
     
-    for i, acc in enumerate(accounts, 1):
-        email = acc["email"]
-        print(f"\n{'='*50}\n[{i}/{len(accounts)}] 正在为账号 {email} 执行保活\n{'='*50}")
-        success, detail = keepalive(email, acc["password"])
-        
-        if success:
-            ok += 1
-            results.append(f"OK {email}: {', '.join(detail)}")
-        else:
-            fail += 1
-            results.append(f"FAIL {email}: {', '.join(detail)}")
-            
-        tg_send(
-            f"{'✅' if success else '❌'} Lunes 自动续期报告\n账号: {email}\n状态: {', '.join(detail)}",
-            acc.get("tg_token", ""), acc.get("tg_chat", "")
-        )
-        if i < len(accounts): 
-            time.sleep(5)
+    status_str = "OK" if success else "FAIL"
+    report = f"{'✅' if success else '❌'} Lunes 自动续期报告\n账号: {email}\n状态: {', '.join(detail)}"
     
-    summary = f"📊 Lunes 续期总览: {ok}/{len(accounts)} 成功\n" + "\n".join(results)
-    print(f"\n{summary}")
+    # 发送 TG 消息
+    tg_send(report, tg_token, tg_chat)
     
-    for acc in accounts:
-        if acc.get("tg_token") and acc.get("tg_chat"):
-            tg_send(summary, acc["tg_token"], acc["tg_chat"])
-            break
-            
-    if fail == len(accounts): 
+    print(f"\n📊 Lunes 续期总览:\n{status_str} {email}: {', '.join(detail)}")
+    
+    if not success:
         sys.exit(1)
 
 if __name__ == "__main__":
