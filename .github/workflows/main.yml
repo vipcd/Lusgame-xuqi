@@ -19,8 +19,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install deps
-        run: pip install --no-cache-dir -r requirements.txt
+      - name: Install dependencies
+        run: |
+          pip install --no-cache-dir -r requirements.txt
+          playwright install chromium --with-deps
 
       - name: Run keepalive
         env:
