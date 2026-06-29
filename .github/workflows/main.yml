@@ -32,7 +32,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --no-cache-dir -r requirements.txt
+          pip install --no-cache-dir -r luneshost.txt
           python -m playwright install firefox --with-deps
 
       - name: Setup and Start Hysteria2 Proxy
@@ -64,7 +64,7 @@ jobs:
           echo "$(date +'%Y-%m-%d %H:%M:%S')" > time.txt
           
           # 🌟 修改点 2：加上 --sparse 参数，强行允许 Git 追踪并添加 time.txt
-          git add --sparse time.txt
+          git add --sparse luneshost-time.txt
           
           git diff --cached --quiet || (git commit -m "run $(date +'%Y-%m-%d %H:%M')" && git push)
 
