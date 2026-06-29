@@ -48,11 +48,16 @@ def keepalive(email, password):
     
     with sync_playwright() as p:
         print("  正在通过 Hysteria2 节点建立安全浏览器隧道...")
-        browser = p.chromium.launch(
-            headless=True,
-            args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
-            proxy={"server": "http://127.0.0.1:1081"} 
-        )
+        try:
+            browser = p.chromium.launch(
+                headless=True,
+                args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+                proxy={"server": "http://127.0.0.1:1081"} 
+            )
+        except Exception as b_err:
+            print(f"  ❌ 浏览器启动失败，可能是代理服务未成功建立监听: {b_err}")
+            return False, [f"browser launch failed: {b_err}"]
+
         context = browser.new_context(user_agent=UA)
         page = context.new_page()
         
@@ -122,7 +127,7 @@ def keepalive(email, password):
                 
                 success = True
             else:
-                print(f"  ❌ 登录失败。可能原因：节点断连、密码错误或 Cloudflare 盾未通过。")
+                print(f"  ❌ 登录失败。可能原因：密码错误、节点断连、或 Cloudflare 拦截。")
                 results.append("login failed")
                 success = False
                 
