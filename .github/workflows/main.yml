@@ -2,7 +2,7 @@ name: Lunes Auto Login (with Dynamic Proxy)
 
 on:
   schedule:
-    - cron: "05 3 */14 * *"
+    - cron: "5 3 */14 * *"
   workflow_dispatch:
 
 permissions:
