@@ -1,5 +1,5 @@
 """
-Lunes Host 自动登录续期脚本 - 独立变量干净版（基于 Playwright）
+Lunes Host 自动登录续期脚本 - 独立变量 + CF 隐身过检测版
 """
 import os
 import sys
@@ -7,8 +7,10 @@ import time
 import re
 import requests
 from playwright.sync_api import sync_playwright
+# 🌟 引入隐身混淆库
+from playwright_stealth import stealth_sync
 
-UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/124.0.0.0 Safari/537.36"
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
 def tg_send(text, token="", chat_id=""):
     token, chat_id = (token or "").strip(), (chat_id or "").strip()
@@ -30,54 +32,72 @@ def keepalive(email, password):
     with sync_playwright() as p:
         print("  正在通过 Hysteria2 节点建立安全浏览器隧道...")
         try:
+            # 🌟 升级：改为 headless=False（有头模式），并最大化窗口伪装成正常用户
             browser = p.chromium.launch(
-                headless=True,
-                args=["--disable-blink-features=AutomationControlled", "--no-sandbox"],
+                headless=False,
+                args=[
+                    "--disable-blink-features=AutomationControlled", 
+                    "--no-sandbox",
+                    "--start-maximized",
+                    "--disable-infobars"
+                ],
                 proxy={"server": "http://127.0.0.1:1081"} 
             )
         except Exception as b_err:
-            print(f"  ❌ 浏览器启动失败，可能是代理服务未成功建立监听: {b_err}")
+            print(f"  ❌ 浏览器启动失败: {b_err}")
             return False, [f"browser launch failed: {b_err}"]
 
-        context = browser.new_context(user_agent=UA)
+        # 🌟 升级：给浏览器上下文指定一个真实的桌面分辨率
+        context = browser.new_context(
+            user_agent=UA,
+            viewport={"width": 1920, "height": 1080}
+        )
         page = context.new_page()
+        
+        # 🌟 升级：在打开网页前，强行注入 Stealth 隐身脚本，抹除所有自动化痕迹
+        stealth_sync(page)
         
         try:
             print("  正在打开 Lunes 登录页面...")
             page.goto("https://betadash.lunes.host/login", timeout=45000)
-            page.wait_for_timeout(4000)
+            page.wait_for_timeout(5000)
             
+            # 给 Cloudflare 充分的默默解析和收集指纹时间
             if "cloudflare" in page.content().lower():
-                print("  检测到 Cloudflare 验证防护，等待节点自动解析...")
-                page.wait_for_timeout(6000)
+                print("  检测到 页面包含 Cloudflare 关键字，给予 8 秒宽限期让环境静置...")
+                page.wait_for_timeout(8000)
             
-            # 🔴 核心诊断：看一眼独立读取后的密码特征，是不是还不对！
             p_len = len(password)
             p_preview = password[0] + "*" * (p_len - 2) + password[-1] if p_len > 2 else "**"
-            print(f"  🔍 [安全诊断] 脚本直接读取到的账号: {email}")
-            print(f"  🔍 [安全诊断] 脚本直接读取到的密码长度: {p_len} 位 | 密文预览: {p_preview}")
+            print(f"  🔍 [安全诊断] 读取到的账号: {email}")
+            print(f"  🔍 [安全诊断] 读取到的密码长度: {p_len} 位 | 密文预览: {p_preview}")
             
-            print("  正在自动输入账号和密码...")
             email_input = page.locator("input[type='email']").first
             pass_input = page.locator("input[type='password']").first
             
-            email_input.fill(email)
-            page.wait_for_timeout(500)
-            pass_input.fill(password)
-            page.wait_for_timeout(500)
+            # 🌟 升级：绝不用 fill()。改用 press_sequentially，模拟真人间隔 100-150 毫秒打字
+            print("  正在模拟真人敲击键盘输入账号...")
+            email_input.focus()
+            email_input.press_sequentially(email, delay=100)
+            page.wait_for_timeout(800)
+            
+            print("  正在模拟真人敲击键盘输入密码...")
+            pass_input.focus()
+            pass_input.press_sequentially(password, delay=120)
+            page.wait_for_timeout(1000)
             
             submit_btn = page.locator("button[type='submit']").first
             print("  正在点击登录按钮...")
             submit_btn.click()
             
-            print("  等待页面跳转中...")
-            page.wait_for_timeout(10000)
+            print("  等待页面跳转中（CF 验证通过通常需要较长时间）...")
+            page.wait_for_timeout(12000)
             
             content = page.content()
             current_url = page.url
             
             if "profile-header" in content or "servers online" in content or "servers" in current_url:
-                print("  🎉 代理登录成功！")
+                print("  🎉 🎉 🎉 成功突破 Cloudflare 防护，登录成功！")
                 results.append("dashboard OK")
                 
                 server_ids = ["51160", "60685"] 
@@ -115,8 +135,8 @@ def keepalive(email, password):
                 
                 success = True
             else:
-                print(f"  ❌ 登录失败。可能原因：密码错误、节点断连、或 Cloudflare 拦截。")
-                print(f"  🔍 当前页面 URL: {current_url}")
+                print(f"  ❌ 依然未能通过验证。")
+                print(f"  🔍 最终停留在 URL: {current_url}")
                 try:
                     page.screenshot(path="login_failed.png", full_page=True)
                     print("  📸 已成功截取失败时的完整网页，并保存为 login_failed.png")
@@ -141,18 +161,16 @@ def main():
     tg_chat = (os.getenv("TG_CHAT_ID") or "").strip()
 
     if not email or not password:
-        print("❌ 错误：GitHub Secrets 中缺少 LUNES_EMAIL 或 LUNES_PASSWORD 变量，请先前往设置！")
+        print("❌ 错误：缺少关键环境变量。")
         sys.exit(1)
 
-    print(f"\n{'='*50}\n正在为账号 {email} 执行保活 (独立变量模式)\n{'='*50}")
+    print(f"\n{'='*50}\n正在为账号 {email} 执行保活 (CF 隐身过检测模式)\n{'='*50}")
     success, detail = keepalive(email, password)
     
     status_str = "OK" if success else "FAIL"
     report = f"{'✅' if success else '❌'} Lunes 自动续期报告\n账号: {email}\n状态: {', '.join(detail)}"
     
-    # 发送 TG 消息
     tg_send(report, tg_token, tg_chat)
-    
     print(f"\n📊 Lunes 续期总览:\n{status_str} {email}: {', '.join(detail)}")
     
     if not success:
